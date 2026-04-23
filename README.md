@@ -1,6 +1,6 @@
 # edumind - AI-Powered Smart Study Helper
 
-EzStudy is a sophisticated study assistance platform built on the MERN stack. It leverages a state-of-the-art Multi-Agent AI architecture to provide deep research, structured writing, and interactive learning tools for students and researchers.
+EduMind is a sophisticated study assistance platform built on the MERN stack. It leverages a state-of-the-art Multi-Agent AI architecture to provide deep research, structured writing, and interactive learning tools for students and researchers.
 
 ## 🚀 Key Features
 
