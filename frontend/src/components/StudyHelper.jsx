@@ -110,6 +110,8 @@ const StudyHelper = ({ studySubject }) => {
   const [lastDuration, setLastDuration] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
+  const [difficulty, setDifficulty] = useState('medium');
+  const [quizRegenerating, setQuizRegenerating] = useState(false);
 
   const personalizationLabel = useMemo(() => {
     const sid = studySubject ?? readStoredSubjectId();
@@ -185,7 +187,7 @@ const StudyHelper = ({ studySubject }) => {
         return;
       }
 
-      const url = `${API_BASE}/api/ask/stream?question=${encodeURIComponent(trimmedQuestion)}&token=${encodeURIComponent(token)}`;
+      const url = `${API_BASE}/api/ask/stream?question=${encodeURIComponent(trimmedQuestion)}&token=${encodeURIComponent(token)}&difficulty=${encodeURIComponent(difficulty)}`;
       let streamDone = false;
 
       const es = new EventSource(url);
@@ -326,6 +328,26 @@ const StudyHelper = ({ studySubject }) => {
     setQuestion(value);
     setError('');
   }, []);
+
+  const handleRegenerateQuiz = useCallback(async () => {
+    if (!answer || quizRegenerating) return;
+    setQuizRegenerating(true);
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const { data } = await axios.post(
+        `${API_BASE}/api/quiz/regenerate`,
+        { answer, difficulty },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (Array.isArray(data.quiz) && data.quiz.length > 0) {
+        setQuiz(data.quiz);
+      }
+    } catch (err) {
+      console.error('Regenerate quiz failed:', err);
+    } finally {
+      setQuizRegenerating(false);
+    }
+  }, [answer, difficulty, quizRegenerating]);
 
   const toggleFavoritesOnly = useCallback(() => {
     setFavoritesOnly((v) => !v);
@@ -480,14 +502,34 @@ const StudyHelper = ({ studySubject }) => {
                   </button>
                 ))}
               </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex min-h-[50px] w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-brand-500 to-cyan-500 px-6 py-3 text-sm font-semibold text-white shadow-card transition duration-200 ease-in-out hover:from-brand-400 hover:to-cyan-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-              >
-                {loading ? <SubmitSpinner /> : null}
-                {loading ? 'Thinking...' : 'Ask AI'}
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {/* Difficulty selector */}
+                <div className="flex items-center gap-1 rounded-2xl border border-ez-border bg-ez-soft/50 p-1">
+                  {['easy', 'medium', 'hard'].map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => setDifficulty(lvl)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold capitalize transition duration-200 ease-in-out ${
+                        difficulty === lvl
+                          ? 'bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex min-h-[50px] w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-brand-500 to-cyan-500 px-6 py-3 text-sm font-semibold text-white shadow-card transition duration-200 ease-in-out hover:from-brand-400 hover:to-cyan-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                >
+                  {loading ? <SubmitSpinner /> : null}
+                  {loading ? 'Thinking...' : 'Ask AI'}
+                </button>
+              </div>
             </div>
           </form>
         </section>
@@ -543,6 +585,27 @@ const StudyHelper = ({ studySubject }) => {
           <Suspense fallback={<QuizSkeleton />}>
             <LazyQuizCard quiz={quiz} />
           </Suspense>
+        ) : null}
+
+        {/* Regenerate quiz button (shown when a quiz exists and not loading) */}
+        {quiz?.length && !loading ? (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleRegenerateQuiz}
+              disabled={quizRegenerating}
+              className="flex items-center gap-2 rounded-2xl border border-ez-border bg-ez-card px-5 py-2.5 text-sm font-medium text-slate-700 shadow-card transition duration-200 ease-in-out hover:border-brand-500/40 hover:bg-brand-500/10 hover:text-brand-600 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:text-brand-300"
+            >
+              {quizRegenerating ? (
+                <SubmitSpinner />
+              ) : (
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.201 2.466l-.312-.311h2.433a.75.75 0 000-1.5H3.989a.75.75 0 00-.75.75v4.242a.75.75 0 001.5 0v-2.43l.31.31a7 7 0 0011.712-3.138.75.75 0 00-1.449-.39zm1.23-3.723a.75.75 0 00.219-.53V2.929a.75.75 0 00-1.5 0V5.36l-.31-.31A7 7 0 003.239 8.188a.75.75 0 101.448.389A5.5 5.5 0 0113.89 6.11l.311.31h-2.432a.75.75 0 000 1.5h4.243a.75.75 0 00.53-.219z" clipRule="evenodd" />
+                </svg>
+              )}
+              {quizRegenerating ? 'Generating new questions...' : 'Regenerate Quiz'}
+            </button>
+          </div>
         ) : null}
 
         <section className="rounded-[1.75rem] border border-dashed border-ez-border bg-ez-card/50 p-5">

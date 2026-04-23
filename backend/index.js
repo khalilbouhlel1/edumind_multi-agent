@@ -7,6 +7,7 @@ import askRouter from "./routes/ask.js"; // Routeur pour les questions d'étude
 import streamAskRouter from "./routes/stream.js";
 import authRouter from "./routes/auth.js";
 import sessionsRouter from "./routes/sessions.js";
+import quizRouter from "./routes/quiz.js";
 import authMiddleware from "./middleware/authMiddleware.js";
 
 // Configuration des variables d'environnement à partir du fichier .env
@@ -31,6 +32,7 @@ askApi.use(authMiddleware);
 askApi.use(askRouter); // POST /
 app.use("/api/ask", askApi);
 app.use("/api/sessions", authMiddleware, sessionsRouter);
+app.use("/api/quiz", authMiddleware, quizRouter);
 
 // Définition du port d'écoute du serveur
 const PORT = 5000;

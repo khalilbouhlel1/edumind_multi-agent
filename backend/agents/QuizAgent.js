@@ -3,12 +3,51 @@ import groq from "../config/ai.js";
 import { subjectPromptLabel } from "../config/subjects.js";
 
 const MAX_ANSWER_CHARS = 12000;
+const MAX_RETRIES = 2;
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Determine how many questions to ask based on material length.
+ */
+const calcQuestionCount = (material) => {
+  const words = material.trim().split(/\s+/).length;
+  if (words < 150) return 2;
+  if (words < 500) return 3;
+  return 5;
+};
+
+/**
+ * Normalize a single quiz item. Supports MCQ and True/False types.
+ * Adds optional `explanation` and `type` fields.
+ */
 const normalizeQuizItem = (raw) => {
   if (!raw || typeof raw !== "object") return null;
+
   const question = String(raw.question ?? "").trim();
   if (!question) return null;
 
+  const type = String(raw.type ?? "mcq").toLowerCase();
+
+  // ── True/False ──────────────────────────────────────────────────────────
+  if (type === "true_false") {
+    const options = ["True", "False"];
+    const rawAnswer = String(raw.answer ?? "").trim().toLowerCase();
+    const answer =
+      rawAnswer === "true" || rawAnswer === "false"
+        ? rawAnswer.charAt(0).toUpperCase() + rawAnswer.slice(1)
+        : null;
+    if (!answer) return null;
+    return {
+      type: "true_false",
+      question,
+      options,
+      answer,
+      explanation: String(raw.explanation ?? "").trim() || null,
+    };
+  }
+
+  // ── MCQ (default) ────────────────────────────────────────────────────────
   let options = raw.options;
   if (!Array.isArray(options)) return null;
   options = options.map((o) => String(o ?? "").trim()).filter(Boolean);
@@ -24,7 +63,13 @@ const normalizeQuizItem = (raw) => {
     }
   }
 
-  return { question, options, answer };
+  return {
+    type: "mcq",
+    question,
+    options,
+    answer,
+    explanation: String(raw.explanation ?? "").trim() || null,
+  };
 };
 
 const parseQuizJson = (text) => {
@@ -49,10 +94,11 @@ const parseQuizJson = (text) => {
   for (const item of parsed) {
     const norm = normalizeQuizItem(item);
     if (norm) out.push(norm);
-    if (out.length === 3) break;
   }
   return out;
 };
+
+// ─── Agent ──────────────────────────────────────────────────────────────────
 
 class QuizAgent extends BaseAgent {
   constructor(onLog) {
@@ -61,64 +107,117 @@ class QuizAgent extends BaseAgent {
 
   /**
    * @param {string} finalAnswerText
-   * @returns {Promise<{ quiz: Array<{question: string, options: string[], answer: string}>, logs: object[] }>}
+   * @param {string} subject
+   * @param {{ difficulty?: 'easy'|'medium'|'hard' }} [options]
+   * @returns {Promise<{ quiz: Array, logs: object[] }>}
    */
-  async call(finalAnswerText, subject) {
+  async call(finalAnswerText, subject, options = {}) {
     const logs = [];
     const material = String(finalAnswerText || "").slice(0, MAX_ANSWER_CHARS);
     const subjectLabel = subjectPromptLabel(subject);
+    const difficulty = options.difficulty ?? "medium";
+    const targetCount = calcQuestionCount(material);
 
-    logs.push(this.log("Received final answer text; generating 3 multiple-choice questions..."));
+    logs.push(
+      this.log(
+        `Generating ${targetCount} ${difficulty}-difficulty questions (MCQ + True/False mix)...`
+      )
+    );
 
     if (!material.trim()) {
       logs.push(this.log("Skipped quiz: empty answer text."));
       return { quiz: [], logs };
     }
 
+    const difficultyInstructions = {
+      easy: "Focus on basic recall and simple definitions. Questions should be straightforward.",
+      medium:
+        "Mix recall with comprehension. Some questions should require understanding, not just memorization.",
+      hard:
+        "Focus on application and analysis. Questions should require students to apply concepts to new scenarios or compare/contrast ideas.",
+    };
+
     const prompt = `
-You are a Quiz Agent creating checks for a ${subjectLabel} student. Given the study material below, create exactly 3 multiple-choice questions that test key ideas from the material, using vocabulary and scenarios appropriate for ${subjectLabel}.
+You are a Quiz Agent creating review questions for a ${subjectLabel} student. Given the study material below, create exactly ${targetCount} questions that test key ideas.
+
+Difficulty level: ${difficulty.toUpperCase()} — ${difficultyInstructions[difficulty]}
+
+Mix question types:
+- Most questions should be "mcq" (multiple-choice with 4 options)
+- At least 1 question should be "true_false" (True/False)
 
 Material:
 """
 ${material}
 """
 
-Return ONLY a valid JSON array (no markdown, no commentary). The array length must be 3.
-Each element must be an object with:
+Return ONLY a valid JSON array (no markdown, no commentary). The array length must be exactly ${targetCount}.
+Each element must be an object with these fields:
+- "type": either "mcq" or "true_false"
 - "question": string (the question text)
-- "options": array of exactly 4 strings (distinct answer choices)
-- "answer": string that MUST exactly equal one of the four strings in "options" (the correct choice)
+- "options": 
+    - For "mcq": array of exactly 4 distinct strings
+    - For "true_false": ["True", "False"]
+- "answer": string that MUST exactly equal one of the values in "options"
+- "explanation": string (1-2 sentences explaining why the answer is correct — this helps students learn)
 `.trim();
 
-    try {
-      logs.push(this.log("Reasoning: Asking Llama 3 (via Groq) to build quiz JSON..."));
+    let quiz = [];
 
-      const completion = await groq.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: "llama-3.1-8b-instant",
-      });
-
-      const text = completion.choices[0]?.message?.content?.trim() || "[]";
-      let quiz = [];
-
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        quiz = parseQuizJson(text);
-      } catch (parseErr) {
-        logs.push(this.log(`Error parsing quiz JSON: ${parseErr.message}`));
-        return { quiz: [], logs };
-      }
+        logs.push(
+          this.log(
+            `Attempt ${attempt}/${MAX_RETRIES}: Asking Llama 3 to build quiz JSON...`
+          )
+        );
 
-      if (quiz.length < 3) {
-        logs.push(this.log(`Warning: only ${quiz.length} valid question(s) after validation.`));
-      } else {
-        logs.push(this.log("Successfully built 3 quiz questions."));
-      }
+        const completion = await groq.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: "llama-3.1-8b-instant",
+          temperature: 0.5,
+        });
 
-      return { quiz, logs };
-    } catch (error) {
-      logs.push(this.log(`Error: ${error.message}`));
-      return { quiz: [], logs };
+        const text =
+          completion.choices[0]?.message?.content?.trim() || "[]";
+
+        try {
+          quiz = parseQuizJson(text);
+        } catch (parseErr) {
+          logs.push(
+            this.log(`Attempt ${attempt} parse error: ${parseErr.message}`)
+          );
+          if (attempt < MAX_RETRIES) continue;
+          return { quiz: [], logs };
+        }
+
+        if (quiz.length >= targetCount) {
+          // Trim to exact count
+          quiz = quiz.slice(0, targetCount);
+          logs.push(
+            this.log(
+              `Successfully built ${quiz.length} quiz questions on attempt ${attempt}.`
+            )
+          );
+          break;
+        }
+
+        logs.push(
+          this.log(
+            `Attempt ${attempt}: only ${quiz.length}/${targetCount} valid question(s). ${
+              attempt < MAX_RETRIES ? "Retrying..." : "Using partial result."
+            }`
+          )
+        );
+      } catch (error) {
+        logs.push(this.log(`Attempt ${attempt} error: ${error.message}`));
+        if (attempt >= MAX_RETRIES) {
+          return { quiz, logs };
+        }
+      }
     }
+
+    return { quiz, logs };
   }
 }
 

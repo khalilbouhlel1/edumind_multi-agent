@@ -51,6 +51,10 @@ router.get("/stream", async (req, res) => {
     return res.status(400).json({ error: "Question is required" });
   }
 
+  const VALID_DIFFICULTIES = new Set(["easy", "medium", "hard"]);
+  const rawDiff = typeof req.query.difficulty === "string" ? req.query.difficulty.trim().toLowerCase() : "medium";
+  const difficulty = VALID_DIFFICULTIES.has(rawDiff) ? rawDiff : "medium";
+
   res.status(200);
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -70,7 +74,7 @@ router.get("/stream", async (req, res) => {
     });
 
     const subject = user.subject || "mathematics";
-    const result = await orchestrator.handleQuestion(question, subject);
+    const result = await orchestrator.handleQuestion(question, subject, { difficulty });
 
     try {
       await Session.create({

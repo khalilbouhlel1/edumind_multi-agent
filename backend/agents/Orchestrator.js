@@ -20,7 +20,7 @@ class Orchestrator {
 
   // Méthode principale pour traiter une question utilisateur
   // Orchestre le flux complet : planification → recherche → rédaction
-  async handleQuestion(question, subject) {
+  async handleQuestion(question, subject, options = {}) {
     let allLogs = []; // Tableau pour accumuler tous les logs des agents
 
     // ÉTAPE 1 : Planification
@@ -37,7 +37,7 @@ class Orchestrator {
     const writerResult = await this.writer.call(researchResults, subject);
     allLogs = [...allLogs, ...writerResult.logs];
 
-    const quizResult = await this.quiz.call(writerResult.answer, subject);
+    const quizResult = await this.quiz.call(writerResult.answer, subject, options);
     allLogs = [...allLogs, ...quizResult.logs];
 
     return {
