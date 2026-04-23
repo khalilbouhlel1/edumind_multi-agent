@@ -30,7 +30,6 @@ EduMind is a sophisticated study assistance platform built on the MERN stack. It
 - **Framework**: Express.js
 - **Database**: MongoDB (Mongoose)
 - **AI Models**: 
-  - Google Gemini AI (`@google/generative-ai`)
   - Groq SDK for high-performance inference
 - **Auth**: JWT (JSON Web Tokens) & Bcryptjs
 - **Environment**: Dotenv for secure configuration
@@ -40,12 +39,12 @@ EduMind is a sophisticated study assistance platform built on the MERN stack. It
 ### Prerequisites
 - Node.js (v18 or higher)
 - MongoDB account (Atlas or local instance)
-- API Keys: Google Gemini and/or Groq
+- API Keys:  Groq
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/ezstudy.git
-cd ezstudy-main
+git clone https://github.com/yourusername/edumind.git
+cd edumind
 ```
 
 ### 2. Backend Setup
@@ -57,7 +56,6 @@ Create a `.env` file in the `backend` directory and add your credentials:
 ```env
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_jwt_secret
-GEMINI_API_KEY=your_gemini_api_key
 GROQ_API_KEY=your_groq_api_key
 ```
 
