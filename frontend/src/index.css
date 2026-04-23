@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --ez-bg: 244 247 251;
+    --ez-card: 255 255 255;
+    --ez-border: 209 219 229;
+    --ez-muted: 71 85 105;
+    --ez-soft: 232 238 247;
+    --ez-spotlight:
+      radial-gradient(circle at top left, rgba(58, 103, 247, 0.12), transparent 30%),
+      radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.14), transparent 28%),
+      linear-gradient(180deg, #f8fbff 0%, #eef3f9 100%);
+  }
+
+  .dark {
+    color-scheme: dark;
+    --ez-bg: 9 14 27;
+    --ez-card: 18 25 41;
+    --ez-border: 45 58 84;
+    --ez-muted: 148 163 184;
+    --ez-soft: 22 32 54;
+    --ez-spotlight:
+      radial-gradient(circle at top left, rgba(58, 103, 247, 0.32), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.18), transparent 24%),
+      linear-gradient(180deg, #09111f 0%, #0d1830 100%);
+  }
+
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply m-0 min-h-screen bg-ez-bg font-sans text-slate-900 transition-colors duration-300 dark:text-slate-100;
+    background-image: var(--ez-spotlight);
+    background-attachment: fixed;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  * {
+    scrollbar-color: rgba(58, 103, 247, 0.45) transparent;
+  }
+
+  ::selection {
+    background: rgba(58, 103, 247, 0.24);
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply border border-ez-border/70 bg-ez-card/80 backdrop-blur-xl;
+  }
+
+  .theme-transition {
+    @apply transition-colors duration-300 ease-out;
+  }
+}
